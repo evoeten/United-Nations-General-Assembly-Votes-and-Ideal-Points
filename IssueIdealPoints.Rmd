@@ -1,0 +1,169 @@
+---
+title: "Issue IdealPoints"
+author: "Erik Voeten"
+date: "4/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, error=FALSE, warning=FALSE)
+```
+
+```{r Data}
+		Path			= "~\\GitHub\\United-Nations-General-Assembly-Votes-and-Ideal-Points\\" 
+	DataCode		= "All"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_all <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+	DataCode		= "HumanRights"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_hr <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+	DataCode		= "Nuclear"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_nu <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+	DataCode		= "NoNukes"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_nn <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+
+	DataCode		= "MiddleEast"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_me <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+
+	DataCode		= "Important"
+	FileSuffix 		= paste(DataCode, "_Apr2020", sep="")		
+df_im <- read.csv(file = paste(Path, "Output\\Idealpointestimates", FileSuffix, ".csv",sep=""), head=TRUE)
+
+
+library(tidyverse)
+df <- df_all %>% left_join (., df_hr, by=c("ccode","session")) %>% 
+  left_join (., df_nu, by=c("ccode","session")) %>% 
+  left_join (., df_nn, by=c("ccode","session")) %>% 
+    left_join (., df_me, by=c("ccode","session")) %>%
+  left_join (., df_im, by=c("ccode","session"))
+    
+write.csv(df, file = paste(Path, "Output\\IssueIdealpointestimates", ".csv",sep=""))
+```
+
+# Issue Ideal Point Estimates
+
+This folder contains estimates of ideal points by issue area. The ideal points are estimated following the methodology explained in Bailey, Michael A., Anton Strezhnev, and Erik Voeten. "Estimating dynamic state preferences from United Nations voting data." *Journal of Conflict Resolution* 61, no. 2 (2017): 430-456. The files containing the issue specific ideal points for Middle East issues (mostly Israel-Palestine), human rights issues, nuclear issues, non-nuclear issues, and important votes can be found in the Output subfolder as "IssueIdealpointestimates.csv." It is also possible to estimate your own ideal point estimates based on pre-defined or custom subsets of data using UN_Ideal_Rcppp.R.
+
+The definition of issue codes is based on searches of terms in the titles and descriptions of resolutions. For example, issues that contain terms like "Palestinian", "Palestine", "Jerusalem", "Golan", "Israel", "Lebanon", "Israeli" fall into the category "Middle East." You can create your own issue category using the UNVotes.Rda datafile in the Data subfolder.
+
+One exception is the category of "Important votes," which is often used for analyses. This category is based on the [State Department publication Voting Practices in the United Nations](https://www.state.gov/voting-practices-in-the-united-nations/). This means that there might be a delay in when this category becomes available.
+
+We need around 10 votes to estimate issue-specific ideal points with some degree of precision. For this reason, we only estimate issue ideal poins from the the time there were reliably 10 or more votes on an issue, usually some time after the 25th session. As usual, be aware that the ideal points are estimated by session rather than years. Sessions typically start in September. Most votes take place in the Fall of that year but some will extend into the spring.
+
+This document contains some basic graphs that provide some insights into what we may learn from looking at issue-specific ideal points.
+
+# Correlation plots
+
+Overall, the correlations between the different ideal point estimates are quite high. The human rights and "no nukes" ideal points are almost identical to the overall ideal point estimates. However, the correlations between nuclear and Middle East ideal points is quite modest. We have good prior reasons to believe that nuclear issues are quite different from the main ideological dimension of contestation, as they have traditionally brought together ideologically diverse nuclear powers versus those states that do not have nuclear weapons, especially if these do not operate under a nuclear umbrella. This is why we estimated separate ideal points excluding all nuclear votes ("NoNukes").
+
+```{r correlation plot }
+
+corrmat <- cor(select(df, IdealPoint, IdealPointHumanRights, IdealPointMiddleEast, IdealPointNuclear, IdealPointNoNukes,IdealPointImportant), method = "pearson", use = "complete.obs")
+library(ggcorrplot)
+t <- ggcorrplot(corrmat,       type = "lower",
+           lab = TRUE)
+
+t
+ggsave(file = paste(Path, "Figures\\IssueCorrs.png", sep=""), plot=t, height=4, width=6, units="in")
+```
+
+It may be interesting to look at sub-period correlations. These are the correlations from the last twenty years only. The patterns are quite consistent.
+
+```{r}
+corrmat <- cor(select(filter(df, session>54), IdealPoint, IdealPointHumanRights, IdealPointMiddleEast, IdealPointNuclear, IdealPointNoNukes, IdealPointImportant), method = "pearson", use = "complete.obs")
+library(ggcorrplot)
+ggcorrplot(corrmat,       type = "lower",
+           lab = TRUE)
+
+```
+
+And below is the last 25 years of the Cold War, where the correlation between nuclear and non-nuclear votes appear a bit higher.
+
+```{r}
+corrmat <- cor(select(filter(df, (session>20&session<44)), IdealPoint, IdealPointHumanRights, IdealPointMiddleEast, IdealPointNuclear, IdealPointNoNukes, IdealPointImportant), method = "pearson", use = "complete.obs")
+library(ggcorrplot)
+ggcorrplot(corrmat,       type = "lower",
+           lab = TRUE)
+
+```
+
+# Individual Ideal Point Plots
+
+Since we already have the plots by country for the different issues (see figures folder), here I focus on countries for different ideal point estimates. Clearly, North Korea has started to behave more like a nuclear power. (Black lines are all issues)
+
+```{r}
+focus <- c("GBR", "USA",   "CHN", "RUS", "FRA", "PRK", "PAK", "IND", "IRN")
+
+df$year <- df$session+1945 
+
+p <- ggplot(filter(df, iso3c.x %in% focus), aes(x =year, y = IdealPoint)) + 
+  geom_line() + geom_line(aes(x=year, y=IdealPointNuclear, linetype="Nuclear"),color="red") + geom_line(aes(x=year, y=IdealPointMiddleEast,linetype="Middle East"), color="red")+
+    theme_light() +   facet_wrap(~ Countryname.x) +
+  labs(x = "Year",  y = "UN Ideal Point", caption = "Graph by Erik Voeten") + theme_light()+labs(linetype = "Issue Area")
+    
+        
+p
+ggsave(file = paste(Path, "Figures\\FigureIssues",FileSuffix, ".png", sep=""), plot=p, height=4, width=6, units="in")
+```
+
+The next graph looks at the nuclear and non-nuclear ideal points for a few select countries. Especially nuclear weapons states that are normally quite far removed from the United States behave quite differently on nuclear votes. Especially is North Korea, which has started to vote more like a nuclear weapons state.
+
+```{r}
+library(ggrepel)
+
+focus <- c("GBR", "USA",   "CHN", "RUS", "FRA", "PRK", "IRN")
+dfp <- df %>%  
+  select(year, iso3c.x,IdealPointNoNukes, IdealPointNuclear) %>%
+pivot_longer(-c("year","iso3c.x"), names_to = "issue", values_to = "IdealPoint") %>%
+  mutate(end_label = ifelse(year == max(year), as.character(iso3c.x), NA))
+  
+
+r <- ggplot(filter(dfp, iso3c.x %in% focus, year>1990), aes(x =year, y = IdealPoint, color=iso3c.x, label = end_label, linetype=issue)) +   geom_line() + 
+  geom_text_repel(arrow = arrow(length = unit(0.03, "npc")))+
+  guides(color = FALSE) +   scale_colour_brewer(palette = "Set1")+
+   labs(x = "Year",  y = "UN Ideal Point", caption = "Graph by Erik Voeten") + theme_light()
+    
+    
+        
+r
+ggsave(file = paste(Path, "Figures\\FigureIssues2",FileSuffix, ".png", sep=""), plot=r, height=4, width=6, units="in")
+```
+
+
+# Scatter Plots
+
+Another way to evaluate the issue-specific ideal points is to look at scatter plots at different points in time. Let's pick a few years to focus on.
+
+```{r, warnings=FALSE}
+
+focusyears <- c("1980", "1990", "1995", "2005", "2015", "2019")
+library(ggrepel)
+df <- df %>% mutate(end_lab = ifelse(iso3c.x %in% focus, as.character(iso3c.x), NA))
+
+p <- ggplot(filter(df, year %in% focusyears), aes(x =IdealPoint, y = IdealPointNuclear, label=end_lab)) + 
+  geom_point() + geom_text_repel(arrow = arrow(length = unit(0.03, "npc"))) +   theme_light()  + geom_smooth(method="lm")+ facet_wrap(~ year) +
+  labs(x = "Ideal Point, All",  y = "Ideal Point, Nuclear", caption = "Graph by Erik Voeten") + ggtitle("All ideal points versus Nuclear Ideal Points, selected years")
+        
+p
+ggsave(file = paste(Path, "Figures\\ScatterIssues",FileSuffix, ".png", sep=""), plot=p, height=4, width=6, units="in")
+
+
+```
+
+ In recent years, it is clear that there is a lot of bloc voting on the Middle East!
+
+```{r}
+focusyears <- c("1980", "1990", "1995", "2005", "2015", "2019")
+library(ggrepel)
+df <- df %>% mutate(end_lab = ifelse(iso3c.x %in% focus, as.character(iso3c.x), NA))
+
+p <- ggplot(filter(df, year %in% focusyears), aes(x =IdealPoint, y = IdealPointMiddleEast, label=end_lab)) +   geom_point() + geom_text_repel(arrow = arrow(length = unit(0.03, "npc"))) +   theme_light()  + geom_smooth(method="lm")+ facet_wrap(~ year) +
+  labs(x = "Ideal Point, All",  y = "Ideal Point, MiddleEast", caption = "Graph by Erik Voeten") + ggtitle("All ideal points versus Middle East Ideal Points, selected years")
+        
+p
+ggsave(file = paste(Path, "Figures\\ScatterIssuesME",FileSuffix, ".png", sep=""), plot=p, height=4, width=6, units="in")
+```
+

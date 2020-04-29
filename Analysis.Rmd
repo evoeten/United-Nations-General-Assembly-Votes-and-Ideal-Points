@@ -1,0 +1,89 @@
+---
+title: "Ex Post Processing of Ideal Point Estimates"
+author: "Erik Voeten"
+date: "4/18/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r data}
+#Run below if no longer in memory
+#	Path			= "~\\GitHub\\United-Nations-General-Assembly-Votes-and-Ideal-Points\\"
+#	DataCode		= "All"
+#FileSuffix 		= paste(DataCode, "_Apr2020", sep="")	
+
+df <- read.table(file = paste(Path, "Output\\ThetaSummaryRW_", 	FileSuffix, ".txt", sep=""))
+#Note that we are going to work with the mean ideal point as the point estimate. There are also Quantile estimates (Q50 is the median of the posterior distribution)
+colnames(df)<- c("ccode", "session", paste("NVotes",DataCode, sep=""), paste("IdealPoint",DataCode, sep=""), paste("QO%",DataCode, sep=""),	paste("Q5%",DataCode, sep=""), paste("Q10%",DataCode, sep=""), paste("Q50%",DataCode, sep=""),	paste("Q90%",DataCode, sep=""), paste("Q95%",DataCode, sep=""), paste("Q100%",DataCode, sep=""))
+##Add country names 
+library(tidyverse)
+library(countrycode)
+df$iso3c  <- countrycode(df$ccode, "cown", "iso3c", warn = T)
+df$Countryname <- countrycode(df$ccode, "cown", "country.name", warn=T)
+#Fixing missing iso3c codes
+df <- df %>%  mutate(iso3c = if_else(ccode == 265, "DDR", iso3c),
+                     iso3c = if_else(ccode == 260, "DEU", iso3c),
+                     iso3c = if_else(ccode == 315, "CSK", iso3c),
+                     iso3c = if_else(ccode == 345, "YUG", iso3c),
+                     iso3c = if_else(ccode == 678, "YAR", iso3c),
+                     iso3c = if_else(ccode == 680, "YAR", iso3c),
+                     Countryname = if_else(ccode == 260, "German Federal Republic", Countryname),
+                     )
+
+#Only run this if you created an agreement matrix
+#agree <- read.table(file=paste(Path, "Output\\AgreeMatrix_", 	FileSuffix, ".txt", sep=""))
+#agree<-select(agree,V3:V8)
+#colnames(agree) <- c("USAgree", "RUSSAgree", "BrazilAgree", "ChinaAgree", "IndiaAgree", "IsraelAgree") 
+#df <- bind_cols(df,agree)
+write.csv(df, file = paste(Path, "Output\\Idealpointestimates",FileSuffix, ".csv", sep=""))                         
+
+```
+
+## Plot with Selected Countries
+
+```{r country plot, echo=FALSE, error=FALSE, message=FALSE}
+#Define countries to plot (you can change to any country using ISO3C codes)
+focus <- c("GBR", "USA",   "CHN", "RUS", "FRA")
+df <- df %>% mutate(end_label = ifelse(session == max(session), Countryname, NA))
+ df$IdealPoint <- df[,4]                   
+  
+library(ggrepel)
+
+p <- ggplot(filter(df, iso3c %in% focus), aes(x = session, y = IdealPoint, 
+         color = iso3c, label = end_label)) + 
+  geom_line(size = 0.8) + 
+  geom_text_repel(nudge_x = 0.5,
+                  nudge_y = 0.1, 
+                  segment.color = NA) + 
+  guides(color = FALSE) + theme_light() + scale_colour_brewer(palette = "Set1")+
+  labs(x = "Session", 
+       y = "UN Ideal Point", 
+              caption = "Graph by Erik Voeten") + theme_light()+
+    theme(plot.title = element_text(size = rel(2), face = "bold"),
+          plot.subtitle = element_text(size = rel(1.5)),
+          axis.text.y = element_text(size = rel(2)),
+          axis.title.x = element_text(size = rel(1.5)),
+          axis.title.y = element_text(size = rel(1.5)),
+          axis.text.x = element_text(size = rel(2)),
+          legend.text = element_text(size = rel(2))
+          )
+p
+ggsave(file = paste(Path, "Figures\\Figure1",FileSuffix, ".png", sep=""), plot=p, height=4, width=6, units="in")
+
+```
+
+```{r}
+#Small multiples
+# This is a really huge plot that you should only look at in high resolution
+df <- arrange(df, Countryname, session)
+
+q <- ggplot(df, aes(x = session, y = IdealPoint)) + geom_line(color = "firebrick",
+            lineend = "round") + theme_light() +  facet_wrap(~ Countryname) 
+ggsave(file = paste(Path, "Figures\\Figure2",FileSuffix, ".png", sep=""), plot=q, height=12, width=18, units="in")
+
+```
+
